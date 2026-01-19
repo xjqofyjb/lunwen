@@ -70,13 +70,13 @@ class Ship:
 # ==========================================
 # 2. 核心逻辑 (已修复缩进和统计 Bug)
 # ==========================================
-def generate_ships(n=20, cost_battery_val=120.0):
+def generate_ships(n=20, cost_battery_val=120.0, seed=42):
     ships = []
-    np.random.seed(42)
+    rng = np.random.default_rng(seed)
     for i in range(n):
-        arr = np.random.randint(0, TOTAL_STEPS - 20)
-        t_c = np.random.randint(8, 12)
-        t_sp = t_c + np.random.randint(4, 8)
+        arr = rng.integers(0, TOTAL_STEPS - 20)
+        t_c = rng.integers(8, 12)
+        t_sp = t_c + rng.integers(4, 8)
         t_bs = 1
         ddl = min(TOTAL_STEPS, arr + t_sp + 10)
         # 注意：这里把 cost_battery 设为了传入的参数
@@ -84,12 +84,22 @@ def generate_ships(n=20, cost_battery_val=120.0):
     return ships
 
 
-def run_ai_column_generation(n_ships=20, enable_ai=True, battery_cost=120.0, n_sp=5):
+def run_ai_column_generation(
+    n_ships=20,
+    enable_ai=True,
+    battery_cost=120.0,
+    n_sp=5,
+    seed=42,
+    time_limit=None,
+):
     # 1. 生成算例
-    ships = generate_ships(n=n_ships, cost_battery_val=battery_cost)
+    ships = generate_ships(n=n_ships, cost_battery_val=battery_cost, seed=seed)
 
     mp = gp.Model("Master_AI")
     mp.Params.OutputFlag = 0  # 静默模式
+    mp.Params.Seed = seed
+    if time_limit is not None:
+        mp.Params.TimeLimit = time_limit
 
     # 2. 初始化主问题
     z_dummies = {}
@@ -108,6 +118,8 @@ def run_ai_column_generation(n_ships=20, enable_ai=True, battery_cost=120.0, n_s
 
     # --- 循环开始 ---
     for it in range(1, 51):
+        if time_limit is not None and time.time() - start_time >= time_limit:
+            break
         mp.optimize()
         if mp.Status != GRB.OPTIMAL: break
         obj_history.append(mp.ObjVal)
@@ -118,6 +130,8 @@ def run_ai_column_generation(n_ships=20, enable_ai=True, battery_cost=120.0, n_s
 
         new_cols = 0
         for s in ships:
+            if time_limit is not None and time.time() - start_time >= time_limit:
+                break
             result = None
 
             # 策略 A: AI 预测

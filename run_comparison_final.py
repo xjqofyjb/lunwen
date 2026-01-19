@@ -9,24 +9,24 @@ from main import run_ai_column_generation, TOTAL_STEPS, N_SP
 # ==========================================
 # 🔧 魔法补丁：定义一个带“贫富差距”的生成函数
 # ==========================================
-def generate_heterogeneous_ships(n=20, cost_battery_val=120.0):
+def generate_heterogeneous_ships(n=20, cost_battery_val=120.0, seed=42):
     """
     这个函数会生成带有价格波动的船只。
     这样才能体现出 AI "挑肥拣瘦" 的优化能力。
     """
     ships = []
-    np.random.seed(42)  # 保证每次生成的随机数一样
+    rng = np.random.default_rng(seed)
     for i in range(n):
-        arr = np.random.randint(0, main.TOTAL_STEPS - 20)
-        t_c = np.random.randint(8, 12)
-        t_sp = t_c + np.random.randint(4, 8)
+        arr = rng.integers(0, main.TOTAL_STEPS - 20)
+        t_c = rng.integers(8, 12)
+        t_sp = t_c + rng.integers(4, 8)
         t_bs = 1
         ddl = min(main.TOTAL_STEPS, arr + t_sp + 10)
 
         # 🔥 核心修改：制造价格差异 (Heterogeneity)
         # 基础换电价格是 120，我们让它在 60 到 200 之间波动
         # 岸电价格固定 50
-        real_batt_cost = np.random.randint(60, 250)
+        real_batt_cost = rng.integers(60, 250)
 
         # 构造船只 (注意：这里把 real_batt_cost 传进去)
         ships.append(main.Ship(i, arr, ddl, t_c, t_sp, t_bs, 50.0, float(real_batt_cost), 1000.0))
@@ -41,9 +41,9 @@ print(">>> ✅ 已注入异质性数据生成器 (VIP模式已开启)")
 # ==========================================
 # 0. 重新定义贪婪算法 (使用新的生成逻辑)
 # ==========================================
-def run_greedy_baseline(n_ships=20, n_sp=5):
+def run_greedy_baseline(n_ships=20, n_sp=5, seed=42):
     # 直接调用被我们修改过的 generate_ships
-    ships = main.generate_ships(n=n_ships)
+    ships = main.generate_ships(n=n_ships, seed=seed)
 
     start_time = time.time()
     shore_schedule = np.zeros(TOTAL_STEPS)  # 资源占用表
@@ -88,7 +88,7 @@ def run_greedy_baseline(n_ships=20, n_sp=5):
 # ==========================================
 # 1. 运行综合对比实验 (制造稀缺性 + 差异性)
 # ==========================================
-def exp_comprehensive_comparison():
+def exp_comprehensive_comparison(seed=42):
     print("\n>>> [最终实验] 启动全维度对比 (Exact vs Greedy vs AI)...")
     results = []
     scales = [20, 50, 100]
@@ -101,14 +101,14 @@ def exp_comprehensive_comparison():
         tight_n_sp = max(1, n // 10)
 
         # 1. Greedy
-        res_greedy = run_greedy_baseline(n_ships=n, n_sp=tight_n_sp)
+        res_greedy = run_greedy_baseline(n_ships=n, n_sp=tight_n_sp, seed=seed)
         results.append({
             "Scale": n, "Method": "Greedy Heuristic",
             "Time": res_greedy['time'], "Cost": res_greedy['obj']
         })
 
         # 2. AI-CG
-        res_ai = run_ai_column_generation(n_ships=n, enable_ai=True, n_sp=tight_n_sp)
+        res_ai = run_ai_column_generation(n_ships=n, enable_ai=True, n_sp=tight_n_sp, seed=seed)
         results.append({
             "Scale": n, "Method": "GNN-Accelerated CG",
             "Time": res_ai['time'], "Cost": res_ai['obj']
@@ -116,7 +116,7 @@ def exp_comprehensive_comparison():
 
         # 3. Exact-CG
         if n <= 100:
-            res_exact = run_ai_column_generation(n_ships=n, enable_ai=False, n_sp=tight_n_sp)
+            res_exact = run_ai_column_generation(n_ships=n, enable_ai=False, n_sp=tight_n_sp, seed=seed)
             results.append({
                 "Scale": n, "Method": "Exact CG",
                 "Time": res_exact['time'], "Cost": res_exact['obj']
