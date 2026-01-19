@@ -90,6 +90,7 @@ def run_ai_column_generation(
     battery_cost=120.0,
     n_sp=5,
     seed=42,
+    ships=None,
     time_limit=None,
     logger=None,
     instance_id=None,
@@ -97,7 +98,10 @@ def run_ai_column_generation(
     method_name=None,
 ):
     # 1. 生成算例
-    ships = generate_ships(n=n_ships, cost_battery_val=battery_cost, seed=seed)
+    if ships is None:
+        ships = generate_ships(n=n_ships, cost_battery_val=battery_cost, seed=seed)
+    else:
+        n_ships = len(ships)
 
     mp = gp.Model("Master_AI")
     mp.Params.OutputFlag = 0  # 静默模式
@@ -228,6 +232,7 @@ def run_ai_column_generation(
         "columns_added": columns_added,
         "min_reduced_cost_last": min_reduced_cost_last,
         "pricing_time_share": pricing_time_share,
+        "status": mp.Status,
     }
     if logger is not None:
         method = method_name or ("AI-CG" if enable_ai else "Exact CG")
