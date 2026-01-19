@@ -3,16 +3,21 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-import joblib
+from experiment_logger import ExperimentLogger
 from main import run_ai_column_generation, generate_ships, Ship, TOTAL_STEPS, N_SP, K_TOTAL
-import gurobipy as gp
-from gurobipy import GRB
 
 
 # ==========================================
 # 1. 强力 Baseline: Time-Limited MIP (限制时间的求解器)
 # ==========================================
-def run_mip_heuristic(n_ships=100, time_limit=15.0, seed=42):
+def run_mip_heuristic(
+    n_ships=100,
+    time_limit=15.0,
+    seed=42,
+    logger=None,
+    instance_id=None,
+    scenario="heterogeneous",
+):
     """
     直接把大问题扔给 Gurobi，限制它只能跑 time_limit 秒。
     这是工业界最常用的方法，也是最有力的对比对象。
@@ -36,11 +41,34 @@ def run_mip_heuristic(n_ships=100, time_limit=15.0, seed=42):
         time_limit=time_limit,
     )
 
-    return {
+    result_payload = {
         "Method": f"Exact CG (Time-Limited {time_limit}s)",
         "Time": result["time"],
         "Cost": result["obj"],
     }
+    if logger is not None:
+        logger.log_row(
+            {
+                "instance_id": instance_id or f"N{n_ships}_seed{seed}_{scenario}",
+                "N": n_ships,
+                "seed": seed,
+                "scenario": scenario,
+                "method": result_payload["Method"],
+                "obj": result_payload["Cost"],
+                "runtime_total": result_payload["Time"],
+                "runtime_rmp": result.get("runtime_rmp", 0.0),
+                "runtime_pricing": result.get("runtime_pricing", 0.0),
+                "status": "ok",
+                "gap": None,
+                "num_iters": result.get("iter"),
+                "num_pricing_calls": result.get("pricing_calls", 0),
+                "num_fallback_calls": result.get("fallback_calls", 0),
+                "num_columns_added": result.get("columns_added", 0),
+                "min_reduced_cost_last": result.get("min_reduced_cost_last"),
+                "pricing_time_share": result.get("pricing_time_share", 0.0),
+            }
+        )
+    return result_payload
 
 
 # ==========================================
@@ -139,5 +167,7 @@ def update_pareto_with_mip():
 
 
 if __name__ == "__main__":
+    logger = ExperimentLogger("results.csv")
+    run_mip_heuristic(logger=logger)
     run_ablation_study()
     update_pareto_with_mip()

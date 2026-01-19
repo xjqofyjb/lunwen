@@ -91,6 +91,10 @@ def run_ai_column_generation(
     n_sp=5,
     seed=42,
     time_limit=None,
+    logger=None,
+    instance_id=None,
+    scenario="default",
+    method_name=None,
 ):
     # 1. 生成算例
     ships = generate_ships(n=n_ships, cost_battery_val=battery_cost, seed=seed)
@@ -113,14 +117,21 @@ def run_ai_column_generation(
 
     # 3. 列生成主循环
     start_time = time.time()
-    stats = {'ai_hits': 0, 'ai_misses': 0}
+    stats = {'ai_hits': 0, 'ai_misses': 0, 'fallback_calls': 0}
     obj_history = []
+    total_rmp_time = 0.0
+    total_pricing_time = 0.0
+    pricing_calls = 0
+    columns_added = 0
+    min_reduced_cost_last = None
 
     # --- 循环开始 ---
     for it in range(1, 51):
         if time_limit is not None and time.time() - start_time >= time_limit:
             break
+        rmp_start = time.time()
         mp.optimize()
+        total_rmp_time += time.time() - rmp_start
         if mp.Status != GRB.OPTIMAL: break
         obj_history.append(mp.ObjVal)
 
@@ -145,7 +156,10 @@ def run_ai_column_generation(
                     pred_idx = torch.argmax(logits, dim=1).item()
                     pred_mode = label_encoder.inverse_transform([pred_idx])[0]
 
+                pricing_calls += 1
+                pricing_start = time.time()
                 result = solve_pricing_problem(s, pi[s.id], mu, rho, TOTAL_STEPS, allowed_mode=pred_mode)
+                total_pricing_time += time.time() - pricing_start
                 if result:
                     stats['ai_hits'] += 1
                 else:
@@ -153,10 +167,15 @@ def run_ai_column_generation(
 
             # 策略 B: 精确算法兜底
             if not result:
+                stats['fallback_calls'] += 1
+                pricing_calls += 1
+                pricing_start = time.time()
                 result = solve_pricing_problem(s, pi[s.id], mu, rho, TOTAL_STEPS, allowed_mode='all')
+                total_pricing_time += time.time() - pricing_start
 
             # 添加列
             if result:
+                min_reduced_cost_last = result["rc"]
                 col = gp.Column()
                 col.addTerms(1.0, cons_fulfill[s.id])
                 if result['mode'] == 'shore':
@@ -169,6 +188,7 @@ def run_ai_column_generation(
                 var_name = f"x_{s.id}_{result['mode']}_{result['start']}"
                 mp.addVar(obj=result['cost'], vtype=GRB.CONTINUOUS, column=col, name=var_name)
                 new_cols += 1
+                columns_added += 1
 
         # 如果没有新列，说明收敛，跳出循环
         if new_cols == 0:
@@ -178,6 +198,7 @@ def run_ai_column_generation(
 
     end_time = time.time()
     total_time = end_time - start_time
+    pricing_time_share = (total_pricing_time / total_time) if total_time > 0 else 0.0
 
     # 4. 结果统计 (修复版)
     shore_count = 0
@@ -194,13 +215,48 @@ def run_ai_column_generation(
 
     shore_rate = shore_count / n_ships
 
-    return {
+    result_payload = {
         "time": total_time,
         "obj": mp.ObjVal,
         "iter": len(obj_history),
         "shore_rate": shore_rate,
-        "history": obj_history
+        "history": obj_history,
+        "runtime_rmp": total_rmp_time,
+        "runtime_pricing": total_pricing_time,
+        "pricing_calls": pricing_calls,
+        "fallback_calls": stats["fallback_calls"],
+        "columns_added": columns_added,
+        "min_reduced_cost_last": min_reduced_cost_last,
+        "pricing_time_share": pricing_time_share,
     }
+    if logger is not None:
+        method = method_name or ("AI-CG" if enable_ai else "Exact CG")
+        status = mp.Status
+        gap = None
+        if hasattr(mp, "ObjBound") and mp.ObjVal != 0:
+            gap = abs(mp.ObjVal - mp.ObjBound) / abs(mp.ObjVal)
+        logger.log_row(
+            {
+                "instance_id": instance_id or f"N{n_ships}_seed{seed}_{scenario}",
+                "N": n_ships,
+                "seed": seed,
+                "scenario": scenario,
+                "method": method,
+                "obj": mp.ObjVal,
+                "runtime_total": total_time,
+                "runtime_rmp": total_rmp_time,
+                "runtime_pricing": total_pricing_time,
+                "status": status,
+                "gap": gap,
+                "num_iters": len(obj_history),
+                "num_pricing_calls": pricing_calls,
+                "num_fallback_calls": stats["fallback_calls"],
+                "num_columns_added": columns_added,
+                "min_reduced_cost_last": min_reduced_cost_last,
+                "pricing_time_share": pricing_time_share,
+            }
+        )
+    return result_payload
 
 
 if __name__ == "__main__":

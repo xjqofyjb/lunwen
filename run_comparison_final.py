@@ -4,6 +4,7 @@ import time
 import matplotlib.pyplot as plt
 import main  # 导入 main 模块以便进行“热修补”
 from main import run_ai_column_generation, TOTAL_STEPS, N_SP
+from experiment_logger import ExperimentLogger
 
 
 # ==========================================
@@ -41,7 +42,15 @@ print(">>> ✅ 已注入异质性数据生成器 (VIP模式已开启)")
 # ==========================================
 # 0. 重新定义贪婪算法 (使用新的生成逻辑)
 # ==========================================
-def run_greedy_baseline(n_ships=20, n_sp=5, seed=42):
+def run_greedy_baseline(
+    n_ships=20,
+    n_sp=5,
+    seed=42,
+    logger=None,
+    instance_id=None,
+    scenario="heterogeneous",
+    method_name="Greedy",
+):
     # 直接调用被我们修改过的 generate_ships
     ships = main.generate_ships(n=n_ships, seed=seed)
 
@@ -79,16 +88,39 @@ def run_greedy_baseline(n_ships=20, n_sp=5, seed=42):
             else:
                 total_cost += s.cost_brown
 
-    return {
+    result_payload = {
         "obj": total_cost,
         "time": time.time() - start_time
     }
+    if logger is not None:
+        logger.log_row(
+            {
+                "instance_id": instance_id or f"N{n_ships}_seed{seed}_{scenario}",
+                "N": n_ships,
+                "seed": seed,
+                "scenario": scenario,
+                "method": method_name,
+                "obj": result_payload["obj"],
+                "runtime_total": result_payload["time"],
+                "runtime_rmp": 0.0,
+                "runtime_pricing": 0.0,
+                "status": "ok",
+                "gap": None,
+                "num_iters": 1,
+                "num_pricing_calls": 0,
+                "num_fallback_calls": 0,
+                "num_columns_added": 0,
+                "min_reduced_cost_last": None,
+                "pricing_time_share": 0.0,
+            }
+        )
+    return result_payload
 
 
 # ==========================================
 # 1. 运行综合对比实验 (制造稀缺性 + 差异性)
 # ==========================================
-def exp_comprehensive_comparison(seed=42):
+def exp_comprehensive_comparison(seed=42, logger=None):
     print("\n>>> [最终实验] 启动全维度对比 (Exact vs Greedy vs AI)...")
     results = []
     scales = [20, 50, 100]
@@ -101,14 +133,31 @@ def exp_comprehensive_comparison(seed=42):
         tight_n_sp = max(1, n // 10)
 
         # 1. Greedy
-        res_greedy = run_greedy_baseline(n_ships=n, n_sp=tight_n_sp, seed=seed)
+        res_greedy = run_greedy_baseline(
+            n_ships=n,
+            n_sp=tight_n_sp,
+            seed=seed,
+            logger=logger,
+            instance_id=f"N{n}_seed{seed}_heterogeneous",
+            scenario="heterogeneous",
+            method_name="Greedy Heuristic",
+        )
         results.append({
             "Scale": n, "Method": "Greedy Heuristic",
             "Time": res_greedy['time'], "Cost": res_greedy['obj']
         })
 
         # 2. AI-CG
-        res_ai = run_ai_column_generation(n_ships=n, enable_ai=True, n_sp=tight_n_sp, seed=seed)
+        res_ai = run_ai_column_generation(
+            n_ships=n,
+            enable_ai=True,
+            n_sp=tight_n_sp,
+            seed=seed,
+            logger=logger,
+            instance_id=f"N{n}_seed{seed}_heterogeneous",
+            scenario="heterogeneous",
+            method_name="GNN-Accelerated CG",
+        )
         results.append({
             "Scale": n, "Method": "GNN-Accelerated CG",
             "Time": res_ai['time'], "Cost": res_ai['obj']
@@ -116,7 +165,16 @@ def exp_comprehensive_comparison(seed=42):
 
         # 3. Exact-CG
         if n <= 100:
-            res_exact = run_ai_column_generation(n_ships=n, enable_ai=False, n_sp=tight_n_sp, seed=seed)
+            res_exact = run_ai_column_generation(
+                n_ships=n,
+                enable_ai=False,
+                n_sp=tight_n_sp,
+                seed=seed,
+                logger=logger,
+                instance_id=f"N{n}_seed{seed}_heterogeneous",
+                scenario="heterogeneous",
+                method_name="Exact CG",
+            )
             results.append({
                 "Scale": n, "Method": "Exact CG",
                 "Time": res_exact['time'], "Cost": res_exact['obj']
@@ -183,5 +241,6 @@ def plot_pareto_comparison():
 
 
 if __name__ == "__main__":
-    exp_comprehensive_comparison()
+    logger = ExperimentLogger("results.csv")
+    exp_comprehensive_comparison(logger=logger)
     plot_pareto_comparison()
