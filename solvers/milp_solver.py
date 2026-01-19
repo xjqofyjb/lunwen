@@ -1,10 +1,9 @@
 import time
 
-import gurobipy as gp
-from gurobipy import GRB
-
 
 def solve_milp(instance, timelimit_seconds, seed):
+    import gurobipy as gp
+    from gurobipy import GRB
     ships = instance["ships"]
     n_sp = instance.get("n_sp", 5)
     k_total = instance.get("k_total", 5)
