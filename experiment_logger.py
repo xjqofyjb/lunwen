@@ -19,6 +19,7 @@ SCHEMA = [
     "num_fallback_calls",
     "num_columns_added",
     "min_reduced_cost_last",
+    "rc_added_last",
     "pricing_time_share",
 ]
 

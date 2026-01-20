@@ -54,6 +54,6 @@ def solve_pricing_problem(ship, duals_fulfill, duals_sp, duals_bs, total_steps, 
                 'duration': edge_data['dur'],
                 'cost': ship.cost_shore if edge_data['mode'] == 'shore' else ship.cost_battery
             }
+        return {"rc": rc}
     except nx.NetworkXNoPath:
-        return None
-    return None
+        return {"rc": 0.0}

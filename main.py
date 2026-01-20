@@ -127,7 +127,8 @@ def run_ai_column_generation(
     total_pricing_time = 0.0
     pricing_calls = 0
     columns_added = 0
-    min_reduced_cost_last = None
+    rc_added_last = None
+    min_rc_last_iter = None
 
     # --- 循环开始 ---
     for it in range(1, 51):
@@ -144,6 +145,7 @@ def run_ai_column_generation(
         rho = [cons_bs[t].Pi for t in range(TOTAL_STEPS)]
 
         new_cols = 0
+        min_rc_this_iter = None
         for s in ships:
             if time_limit is not None and time.time() - start_time >= time_limit:
                 break
@@ -178,22 +180,28 @@ def run_ai_column_generation(
                 total_pricing_time += time.time() - pricing_start
 
             # 添加列
-            if result:
-                min_reduced_cost_last = result["rc"]
-                col = gp.Column()
-                col.addTerms(1.0, cons_fulfill[s.id])
-                if result['mode'] == 'shore':
-                    for k in range(result['start'], result['start'] + result['duration']):
-                        if k < TOTAL_STEPS: col.addTerms(1.0, cons_sp[k])
-                elif result['mode'] == 'battery':
-                    if result['start'] < TOTAL_STEPS: col.addTerms(1.0, cons_bs[result['start']])
+            if result is not None:
+                rc_val = result.get("rc")
+                if rc_val is not None:
+                    if min_rc_this_iter is None or rc_val < min_rc_this_iter:
+                        min_rc_this_iter = rc_val
+                if "mode" in result:
+                    rc_added_last = result["rc"]
+                    col = gp.Column()
+                    col.addTerms(1.0, cons_fulfill[s.id])
+                    if result['mode'] == 'shore':
+                        for k in range(result['start'], result['start'] + result['duration']):
+                            if k < TOTAL_STEPS: col.addTerms(1.0, cons_sp[k])
+                    elif result['mode'] == 'battery':
+                        if result['start'] < TOTAL_STEPS: col.addTerms(1.0, cons_bs[result['start']])
 
-                # 变量名必须包含 shore/battery 方便后续统计
-                var_name = f"x_{s.id}_{result['mode']}_{result['start']}"
-                mp.addVar(obj=result['cost'], vtype=GRB.CONTINUOUS, column=col, name=var_name)
-                new_cols += 1
-                columns_added += 1
+                    # 变量名必须包含 shore/battery 方便后续统计
+                    var_name = f"x_{s.id}_{result['mode']}_{result['start']}"
+                    mp.addVar(obj=result['cost'], vtype=GRB.CONTINUOUS, column=col, name=var_name)
+                    new_cols += 1
+                    columns_added += 1
 
+        min_rc_last_iter = min_rc_this_iter
         # 如果没有新列，说明收敛，跳出循环
         if new_cols == 0:
             break
@@ -230,7 +238,8 @@ def run_ai_column_generation(
         "pricing_calls": pricing_calls,
         "fallback_calls": stats["fallback_calls"],
         "columns_added": columns_added,
-        "min_reduced_cost_last": min_reduced_cost_last,
+        "min_reduced_cost_last": min_rc_last_iter,
+        "rc_added_last": rc_added_last,
         "pricing_time_share": pricing_time_share,
         "status": mp.Status,
     }
@@ -257,7 +266,8 @@ def run_ai_column_generation(
                 "num_pricing_calls": pricing_calls,
                 "num_fallback_calls": stats["fallback_calls"],
                 "num_columns_added": columns_added,
-                "min_reduced_cost_last": min_reduced_cost_last,
+                "min_reduced_cost_last": min_rc_last_iter,
+                "rc_added_last": rc_added_last,
                 "pricing_time_share": pricing_time_share,
             }
         )

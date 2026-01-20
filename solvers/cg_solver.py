@@ -28,5 +28,6 @@ def solve_cg(instance, params):
         "num_fallback_calls": result.get("fallback_calls"),
         "num_columns_added": result.get("columns_added"),
         "min_reduced_cost_last": result.get("min_reduced_cost_last"),
+        "rc_added_last": result.get("rc_added_last"),
         "pricing_time_share": result.get("pricing_time_share"),
     }

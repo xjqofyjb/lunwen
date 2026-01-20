@@ -146,6 +146,7 @@ def log_error(logger, instance, method, error):
             "num_fallback_calls": None,
             "num_columns_added": None,
             "min_reduced_cost_last": None,
+            "rc_added_last": None,
             "pricing_time_share": None,
         }
     )
@@ -215,6 +216,7 @@ def main():
                                 "num_fallback_calls": result.get("num_fallback_calls"),
                                 "num_columns_added": result.get("num_columns_added"),
                                 "min_reduced_cost_last": result.get("min_reduced_cost_last"),
+                                "rc_added_last": result.get("rc_added_last"),
                                 "pricing_time_share": result.get("pricing_time_share"),
                             }
                         )
