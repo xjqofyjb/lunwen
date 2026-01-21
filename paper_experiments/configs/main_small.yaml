@@ -1,0 +1,5 @@
+Ns: [50, 100]
+seeds: 1..5
+scenarios: [U]
+methods: [greedy, milp60, milp300, cg]
+out: results_main_small.csv
