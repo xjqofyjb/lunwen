@@ -32,6 +32,24 @@ def aggregate(rows, metric):
     return stats
 
 
+def aggregate_status(rows):
+    groups = defaultdict(list)
+    for row in rows:
+        key = (int(row["N"]), row["method"], row["scenario"])
+        status = row.get("status")
+        if status is not None:
+            groups[key].append(str(status))
+    return groups
+
+
+def summarize_status(statuses):
+    if any("error" in s.lower() for s in statuses):
+        return "error"
+    if any(s in {"9", "TIME_LIMIT"} or "time" in s.lower() for s in statuses):
+        return "time limit"
+    return "ok"
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--in", dest="input_path", required=True)
@@ -43,22 +61,32 @@ def main():
 
     obj_stats = aggregate(rows, "obj")
     runtime_stats = aggregate(rows, "runtime_total")
+    status_stats = aggregate_status(rows)
 
     ns = sorted({key[0] for key in obj_stats})
     methods = sorted({key[1] for key in obj_stats})
     scenarios = sorted({key[2] for key in obj_stats})
 
-    lines = ["\\begin{tabular}{l l l l}", "\\hline", "N & Scenario & Method & Obj (mean$\\pm$std) \\\", "\\hline"]
+    lines = [
+        "\\begin{tabular}{l l l l l}",
+        "\\hline",
+        "N & Scenario & Method & Obj (mean$\\pm$std) & Status \\\\",
+        "\\hline",
+    ]
     for n in ns:
         for scenario in scenarios:
             for method in methods:
                 obj = obj_stats.get((n, method, scenario))
                 runtime = runtime_stats.get((n, method, scenario))
+                status = status_stats.get((n, method, scenario), [])
                 if obj is None:
                     continue
                 obj_text = f"{obj[0]:.3f} $\\pm$ {obj[1]:.3f}"
                 runtime_text = f"{runtime[0]:.3f} $\\pm$ {runtime[1]:.3f}" if runtime else "-"
-                lines.append(f"{n} & {scenario} & {method} & {obj_text} ({runtime_text}) \\\")
+                status_text = summarize_status(status)
+                lines.append(
+                    f"{n} & {scenario} & {method} & {obj_text} ({runtime_text}) & {status_text} \\\\"
+                )
     lines.append("\\hline")
     lines.append("\\end{tabular}")
 

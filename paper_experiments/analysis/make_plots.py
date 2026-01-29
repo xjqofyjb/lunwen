@@ -37,7 +37,7 @@ def aggregate(rows, metric):
     return stats
 
 
-def plot_metric(stats, metric, ylabel, out_path):
+def plot_metric(stats, title, ylabel, out_path):
     try:
         import matplotlib.pyplot as plt
     except Exception:
@@ -48,8 +48,10 @@ def plot_metric(stats, metric, ylabel, out_path):
     scenarios = sorted({key[2] for key in stats})
     ns = sorted({key[0] for key in stats})
 
-    for scenario in scenarios:
-        plt.figure(figsize=(8, 5))
+    fig, axes = plt.subplots(len(scenarios), 1, figsize=(8, 4 * len(scenarios)))
+    if len(scenarios) == 1:
+        axes = [axes]
+    for ax, scenario in zip(axes, scenarios):
         for method in methods:
             means = []
             stds = []
@@ -65,15 +67,15 @@ def plot_metric(stats, metric, ylabel, out_path):
             ys = [m for m in means if m is not None]
             es = [s for s in stds if s is not None]
             if xs:
-                plt.errorbar(xs, ys, yerr=es, marker="o", linestyle="-", label=method)
-        plt.xlabel("N")
-        plt.ylabel(ylabel)
-        plt.title(f"{metric} ({scenario})")
-        plt.grid(True, linestyle="--", alpha=0.5)
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(out_path / f"{metric}_{scenario}.png", dpi=300)
-        plt.close()
+                ax.errorbar(xs, ys, yerr=es, marker="o", linestyle="-", label=method)
+        ax.set_xlabel("N")
+        ax.set_ylabel(ylabel)
+        ax.set_title(f"{title} ({scenario})")
+        ax.grid(True, linestyle="--", alpha=0.5)
+        ax.legend()
+    fig.tight_layout()
+    fig.savefig(out_path / f"{title}.png", dpi=300)
+    plt.close(fig)
 
 
 def plot_mechanism(stats_map, out_path):
@@ -87,10 +89,13 @@ def plot_mechanism(stats_map, out_path):
     methods = sorted({key[1] for stats in stats_map.values() for key in stats})
     ns = sorted({key[0] for stats in stats_map.values() for key in stats})
 
-    for scenario in scenarios:
-        fig, axes = plt.subplots(1, 3, figsize=(14, 4))
-        for idx, (metric, stats) in enumerate(stats_map.items()):
-            ax = axes[idx]
+    fig, axes = plt.subplots(len(scenarios), 3, figsize=(14, 4 * len(scenarios)))
+    if len(scenarios) == 1:
+        axes = [axes]
+    for row_idx, scenario in enumerate(scenarios):
+        row_axes = axes[row_idx]
+        for col_idx, (metric, stats) in enumerate(stats_map.items()):
+            ax = row_axes[col_idx]
             for method in methods:
                 means = []
                 stds = []
@@ -108,14 +113,13 @@ def plot_mechanism(stats_map, out_path):
                 if xs:
                     ax.errorbar(xs, ys, yerr=es, marker="o", linestyle="-", label=method)
             ax.set_xlabel("N")
-            ax.set_title(metric)
+            ax.set_title(f"{metric} ({scenario})")
             ax.grid(True, linestyle="--", alpha=0.5)
-        axes[0].set_ylabel("Value")
-        axes[-1].legend(loc="best")
-        fig.suptitle(f"Mechanism Metrics ({scenario})")
-        fig.tight_layout()
-        fig.savefig(out_path / f"Fig_Mechanism_{scenario}.png", dpi=300)
-        plt.close(fig)
+        row_axes[0].set_ylabel("Value")
+    axes[-1][2].legend(loc="best")
+    fig.tight_layout()
+    fig.savefig(out_path / "Fig_Mechanism.png", dpi=300)
+    plt.close(fig)
 
 
 def main():

@@ -37,8 +37,52 @@ def _generate_ships_fallback(n: int, seed: int, cost_battery_val: float) -> List
     return ships
 
 
+def _clustered_arrivals(n: int, seed: int):
+    import random
+
+    rng = random.Random(seed)
+    peaks = [TOTAL_STEPS * 0.25, TOTAL_STEPS * 0.75]
+    spread = TOTAL_STEPS * 0.08
+    arrivals = []
+    for _ in range(n):
+        peak = peaks[0] if rng.random() < 0.5 else peaks[1]
+        offset = rng.gauss(0, spread)
+        arr = int(max(0, min(TOTAL_STEPS - 20, peak + offset)))
+        arrivals.append(arr)
+    return arrivals
+
+
+def _apply_h1(ships, seed):
+    arrivals = _clustered_arrivals(len(ships), seed)
+    for ship, arr in zip(ships, arrivals):
+        ship.arrival_time = arr
+        duration = max(ship.t_cargo, ship.t_shore_power)
+        ship.deadline = min(TOTAL_STEPS, arr + duration + 10)
+
+
+def _apply_h2(ships, seed):
+    import random
+
+    rng = random.Random(seed)
+    indices = list(range(len(ships)))
+    rng.shuffle(indices)
+    split = len(indices) // 2
+    small_ids = set(indices[:split])
+    for idx, ship in enumerate(ships):
+        if idx in small_ids:
+            ship.t_cargo = max(4, ship.t_cargo - 2)
+            ship.t_shore_power = max(ship.t_cargo, ship.t_shore_power - 2)
+            ship.cost_shore = max(30.0, ship.cost_shore - 10.0)
+        else:
+            ship.t_cargo = ship.t_cargo + 3
+            ship.t_shore_power = ship.t_shore_power + 3
+            ship.cost_shore = ship.cost_shore + 20.0
+        duration = max(ship.t_cargo, ship.t_shore_power)
+        ship.deadline = min(TOTAL_STEPS, ship.arrival_time + duration + 10)
+
+
 def generate_instance(N: int, seed: int, scenario: str):
-    if scenario != "U":
+    if scenario not in {"U", "H1", "H2"}:
         raise NotImplementedError(f"Scenario '{scenario}' not implemented")
 
     try:
@@ -50,6 +94,11 @@ def generate_instance(N: int, seed: int, scenario: str):
         ships = legacy_generate_ships(n=N, cost_battery_val=120.0, seed=seed)
     else:
         ships = _generate_ships_fallback(N, seed, 120.0)
+
+    if scenario == "H1":
+        _apply_h1(ships, seed)
+    elif scenario == "H2":
+        _apply_h2(ships, seed)
 
     return {
         "id": f"N{N}_seed{seed}_{scenario}",
