@@ -1,0 +1,5 @@
+Ns: [20, 30]
+seeds: 1..10
+scenarios: [U]
+methods: [cg, milp300]
+out: results_correctness.csv

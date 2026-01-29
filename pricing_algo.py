@@ -1,16 +1,7 @@
 import networkx as nx
-import time  # <--- 引入 time
 
 
 def solve_pricing_problem(ship, duals_fulfill, duals_sp, duals_bs, total_steps, allowed_mode='all'):
-    # === 🔬 论文技巧：模拟真实复杂问题的计算负载 ===
-    # 在实际的港口调度中，子问题是 NP-Hard 的 (ESPPRC)，求解极其耗时。
-    # 为了在论文中展示 AI 跳过复杂计算的优势，我们给“精确搜索”增加一个微小的模拟耗时。
-    # 如果是 AI 推荐的模式 (allowed_mode != 'all')，则不需要这个耗时 (因为搜索空间被剪枝了)。
-    if allowed_mode == 'all':
-        time.sleep(0.02)  # 模拟求解一个复杂 ESPPRC 需要 20ms
-    # ==========================================
-
     G = nx.DiGraph()
     source, sink = 'Src', 'Snk'
     pi_val = duals_fulfill
@@ -63,6 +54,6 @@ def solve_pricing_problem(ship, duals_fulfill, duals_sp, duals_bs, total_steps, 
                 'duration': edge_data['dur'],
                 'cost': ship.cost_shore if edge_data['mode'] == 'shore' else ship.cost_battery
             }
+        return {"rc": rc}
     except nx.NetworkXNoPath:
-        return None
-    return None
+        return {"rc": 0.0}

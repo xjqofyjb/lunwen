@@ -81,7 +81,9 @@ def load_and_process_data(csv_path="gnn_training_data.csv"):
 # ==========================================
 # 3. 训练主程序
 # ==========================================
-def train_ai():
+def train_ai(seed=42):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
     # A. 准备数据
     X_raw, Y_raw, label_encoder = load_and_process_data()
 
@@ -91,7 +93,7 @@ def train_ai():
 
     # 划分训练集和测试集 (80% 训练, 20% 验证)
     X_train, X_test, y_train, y_test = train_test_split(
-        X_scaled, Y_raw, test_size=0.2, random_state=42
+        X_scaled, Y_raw, test_size=0.2, random_state=seed
     )
 
     # 转为 PyTorch Tensor
