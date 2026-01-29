@@ -5,7 +5,7 @@ from pathlib import Path
 from experiment_logger import ExperimentLogger, SCHEMA
 from instances import generate_instance
 from solvers.cg_solver import solve_cg
-from solvers.greedy_solver import solve_greedy
+from solvers.greedy_solver import solve_fifo, solve_greedy
 from solvers.milp_solver import solve_milp
 
 
@@ -50,6 +50,8 @@ def load_existing_keys(csv_path):
 def run_method(method, instance):
     if method == "greedy":
         return solve_greedy(instance)
+    if method == "fifo":
+        return solve_fifo(instance)
     if method == "cg":
         return solve_cg(instance, {"enable_ai": False, "seed": instance["seed"], "method_name": "cg"})
     if method == "milp60":
